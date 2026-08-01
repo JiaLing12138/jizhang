@@ -2,6 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<script>
+/* 地址栏敏感参数（OCR 全文/豆包结果）必须在任何统计脚本之前清掉：
+   避免平台注入的统计脚本读到账单内容；同时防止刷新重跑预填。 */
+var PAGE_QUERY='';
+try{ PAGE_QUERY=location.search||''; if(PAGE_QUERY) history.replaceState(null,'',location.pathname); }catch(e){}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -252,10 +258,6 @@
 
 <script>
 "use strict";
-/* 地址栏里可能带着 OCR 全文/豆包结果等敏感参数：先抓下来，再立即清掉。
-   好处：刷新页面不会重复弹预填；云端注入的统计脚本也拿不到账单内容。 */
-var PAGE_QUERY='';
-try{ PAGE_QUERY=location.search||''; if(PAGE_QUERY) history.replaceState(null,'',location.pathname); }catch(e){}
 var LS = { rec:'gr_records', sav:'gr_savings', acc:'gr_accounts', asset:'gr_assets' };
 
 function $(id){ return document.getElementById(id); }
