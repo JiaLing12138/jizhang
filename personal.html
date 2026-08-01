@@ -703,21 +703,21 @@ function paintSaving(sv){
 
 /* ---------- OCR 解析（仅预填，不自动保存） ---------- */
 function extractAmount(text){
-  // 1) 剔除超长数字（交易单号/手机号等，如 4200003120202607318735183904）
-  var clean=text.replace(/[0-9]{11,}/g,' ');
-  var kw=['实付','应付','支付','付款','消费','金额','合计','总计','共计','小计','收款'];
+  // 1) 剔除超长数字（交易单号/手机号等，如 4200003120202607318735183904）+ 千分位逗号
+  var clean=String(text).replace(/[0-9]{11,}/g,' ').replace(/[,，]/g,'');
+  var kw=['实付','应付','实收','退款','到账','支付','付款','消费','金额','合计','总计','共计','小计','收款','转入','转账'];
   var i,m,v;
-  // 2) 关键词优先：关键词后 6 个字符内出现金额（允许换行；优先 ¥ 前缀，其次带小数）
+  // 2) 关键词优先：关键词后 6 个字符内出现金额（允许换行；优先 ¥ 前缀可带负号，其次带小数）
   for(i=0;i<kw.length;i++){
     var k=kw[i];
-    m=clean.match(new RegExp(k+'[^0-9¥]{0,6}?¥\\s*[0-9]+(?:\\.[0-9]{1,2})?'));
-    if(m){ v=parseFloat(m[0].replace(/[^0-9.]/g,'')); if(v>0&&v<1e7) return v; }
-    m=clean.match(new RegExp(k+'[^0-9¥]{0,6}?([0-9]+\\.[0-9]{1,2})'));
-    if(m){ v=parseFloat(m[1]); if(v>0&&v<1e7) return v; }
+    m=clean.match(new RegExp(k+'[^0-9¥\\-]{0,6}?¥\\s*[-+]?\\s*[0-9]+(?:\\.[0-9]{1,2})?'));
+    if(m){ v=Math.abs(parseFloat(m[0].replace(/[^0-9.]/g,''))); if(v>0&&v<1e7) return v; }
+    m=clean.match(new RegExp(k+'[^0-9¥\\-]{0,6}?([0-9]+\\.[0-9]{1,2})'));
+    if(m){ v=Math.abs(parseFloat(m[1])); if(v>0&&v<1e7) return v; }
   }
-  // 3) 兜底：第一个 ¥ 金额
-  m=clean.match(/¥\s*([0-9]+(?:\.[0-9]{1,2})?)/);
-  if(m){ v=parseFloat(m[1]); if(v>0&&v<1e7) return v; }
+  // 3) 兜底：第一个 ¥ 金额（可带负号）
+  m=clean.match(/¥\s*[-+]?\s*([0-9]+(?:\.[0-9]{1,2})?)/);
+  if(m){ v=Math.abs(parseFloat(m[1])); if(v>0&&v<1e7) return v; }
   // 4) 最后兜底：第一个普通数字（排除 0/超大）
   m=clean.match(/([0-9]+(?:\.[0-9]{1,2})?)/);
   if(m){ v=parseFloat(m[1]); if(v>0&&v<1e7) return v; }
@@ -742,6 +742,14 @@ function cleanNoteLine(text, amt){
     if(m && m[1]) return m[1].slice(0,50);
   }
   for(i=0;i<lines.length;i++){
+    m=lines[i].match(/交易对方[：:]?\s*([^\s]{1,30})/);
+    if(m && m[1]) return m[1].slice(0,50);
+  }
+  for(i=0;i<lines.length;i++){
+    m=lines[i].match(/商户名称?[：:]?\s*([^\s]{1,30})/);
+    if(m && m[1]) return m[1].slice(0,50);
+  }
+  for(i=0;i<lines.length;i++){
     m=lines[i].match(/备注[：:]?\s*([^\s]{1,30})/);
     if(m && m[1]) return m[1].slice(0,50);
   }
@@ -755,7 +763,7 @@ function cleanNoteLine(text, amt){
   if(idx>0) order.push(idx-1);
   if(idx+1<lines.length) order.push(idx+1);
   if(idx+2<lines.length) order.push(idx+2);
-  var NOISE=/微信支付|支付宝|已支付|支付成功|交易成功|收款方|付款方|订单号|交易单号|商户单号|转账成功|完成|备注|合计|总计|共计|小计|实付|应付|支付|金额|消费|付款方式|交易时间|零钱|余额|银行卡|信用卡|花呗|云闪付|储蓄卡|优惠/g;
+  var NOISE=/微信支付|支付宝|已支付|支付成功|交易成功|收款方|付款方|订单号|交易单号|商户单号|商户|转账成功|完成|备注|合计|总计|共计|小计|实付|应付|支付|金额|消费|付款方式|交易时间|零钱|余额|银行卡|信用卡|花呗|云闪付|储蓄卡|优惠|商品/g;
   for(var n=0;n<order.length;n++){
     var s=lines[order[n]].replace(/[0-9]{11,}/g,' ')
            .replace(/¥\s*[0-9]+(?:\.[0-9]{1,2})?/g,' ')
@@ -793,8 +801,14 @@ var LINEKW={ '餐饮':['餐','饭','菜','面','食'], '外卖':['外卖','美�
   '学习':['书','课'], '通讯':['话费','流量'],
   '人情':['红包','礼'] };
 function detectCategory(text){
-  var t=text;
-  for(var cat in MERCHANT){ if(MERCHANT[cat].some(function(k){return t.indexOf(k)>=0;})) return cat; }
+  var t=String(text);
+  // 1) 商家标签行最可信：收款方 / 交易对方 / 商户名称
+  var m=t.match(/收款方[：:]\s*([^\s]{1,30})/)||t.match(/交易对方[：:]\s*([^\s]{1,30})/)||t.match(/商户名称?[：:]\s*([^\s]{1,30})/);
+  var label=m?m[1]:'';
+  if(label){ for(var cat in MERCHANT){ if(MERCHANT[cat].some(function(k){return label.indexOf(k)>=0;})) return cat; } }
+  // 2) 整段商家词
+  for(var c2 in MERCHANT){ if(MERCHANT[c2].some(function(k){return t.indexOf(k)>=0;})) return c2; }
+  // 3) 行内关键词
   var lines=t.split(/\r?\n/);
   for(var i=0;i<lines.length;i++){ for(var c in LINEKW){ if(LINEKW[c].some(function(k){return lines[i].indexOf(k)>=0;})) return c; } }
   return '其他';
