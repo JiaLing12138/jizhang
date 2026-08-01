@@ -6,7 +6,9 @@ const fs = require('fs');
 const path = require('path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'personal.html'), 'utf8');
-const src = html.replace(/^[\s\S]*?<script>/m, '').replace(/<\/script>[\s\S]*$/, '');
+/* personal.html 有多个 <script> 块（head 里清参脚本 + 主逻辑），取最后一个主块 */
+const blocks = html.match(/<script>([\s\S]*?)<\/script>/g) || [];
+const src = blocks.length ? blocks[blocks.length - 1].replace(/^<script>/, '').replace(/<\/script>$/, '') : '';
 
 function grab(fn){
   const i = src.indexOf('function ' + fn);
