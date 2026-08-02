@@ -40,12 +40,12 @@ async function run(qp) {
     return;
   }
 
-  const isQuick = qp.clip === '1';
+  // 剪贴板每次都读：快捷指令传入文字（clip=1），或剪贴板里恰好有像账单的内容时也自动预填
   let ocrText = '';
-  if (isQuick) {
-    try { ocrText = Pasteboard.getString() || ''; } catch (e) {}
-  }
-  logLine('ocr=' + (ocrText ? ocrText.length : 0));
+  try { ocrText = Pasteboard.getString() || ''; } catch (e) {}
+  const hasBill = ocrText && (D.extractAmount(ocrText) !== null || /退款|退货|收款方|商户|支付/.test(ocrText));
+  const isQuick = qp.clip === '1' || !!hasBill;
+  logLine('ocr=' + (ocrText ? ocrText.length : 0) + ' quick=' + (isQuick ? 1 : 0));
 
   const dec = decodePage();
   let html = dec.ok ? dec.html : null;
@@ -66,25 +66,27 @@ async function run(qp) {
   let state;
   try { state = D.loadState(); } catch (e) { state = null; logLine('state err ' + e); }
   if (!state) state = D.defaultState();
+  try { logLine('storage=' + D.storageName() + ' path=' + D.dataPath()); } catch (e) {}
   const safeState = JSON.stringify(state).replace(/</g, '\\u003c');
   const safeOcr = JSON.stringify(ocrText || '').replace(/</g, '\\u003c');
   html = html.replace('/*__STATE__*/null', safeState).replace("/*__OCR__*/''", safeOcr);
+  html = html.replace('/*__QUICK__*/0', isQuick ? '1' : '0');
   logLine('html=' + html.length);
 
   const wv = new WebView();
   wv.onShouldStartLoad = (req) => {
     const url = (req && req.url) || '';
-    if (url.indexOf('scriptable://save') === 0) {
+    if (url.indexOf('jz-save.local') >= 0 || url.indexOf('scriptable://save') === 0) {
       wv.evaluateJavaScript("document.getElementById('__out').value").then((payload) => {
         try {
           const st = JSON.parse(payload);
-          D.saveState({ records: st.records || [], savings: st.savings || [], accounts: st.accounts || [], assets: st.assets || [] });
-          logLine('saved');
+          const ok = D.saveState({ records: st.records || [], savings: st.savings || [], accounts: st.accounts || [], assets: st.assets || [] });
+          logLine('saveState ' + (ok ? 'ok' : 'FAIL'));
         } catch (e) { logLine('save err ' + e); }
       });
       return false;
     }
-    if (url.indexOf('scriptable://backup') === 0) {
+    if (url.indexOf('jz-backup.local') >= 0 || url.indexOf('scriptable://backup') === 0) {
       wv.evaluateJavaScript("document.getElementById('__out').value").then((payload) => {
         try {
           const st = JSON.parse(payload);
@@ -94,7 +96,7 @@ async function run(qp) {
       });
       return false;
     }
-    if (url.indexOf('scriptable://import') === 0) {
+    if (url.indexOf('jz-import.local') >= 0 || url.indexOf('scriptable://import') === 0) {
       (async () => {
         try {
           const dp = new DocumentPicker(['public.json']);

@@ -6,6 +6,7 @@
 /* 由 Scriptable 注入：INJECTED_STATE / INJECTED_OCR */
 var INJECTED_STATE = /*__STATE__*/null;
 var INJECTED_OCR = /*__OCR__*/'';
+var INJECTED_QUICK = /*__QUICK__*/0;
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -278,7 +279,7 @@ function set(k,v){ _cache[k]=v; persist(); }
 function persist(){
   var o=document.getElementById('__out'); if(!o) return;
   o.value=JSON.stringify({records:_cache[LS.rec]||[], savings:_cache[LS.sav]||[], accounts:_cache[LS.acc]||[], assets:_cache[LS.asset]||[]});
-  location.href='scriptable://save';
+  location.href='https://jz-save.local/';
 }
 function records(){ return get(LS.rec)||[]; }
 function savings(){ return get(LS.sav)||[]; }
@@ -859,7 +860,10 @@ function matchCat(c){
 }
 function applyOCR(){
   var text=INJECTED_OCR||'';
-  if(!text){ return; }
+  if(!text){
+    if(INJECTED_QUICK){ openForm('exp'); toast('没读到剪贴板内容，请手动填写'); }
+    return;
+  }
   var amt=extractAmount(text); var refund=isRefund(text);
   var cat= refund? '退款' : detectCategory(text);
   var dt=extractDate(text);
@@ -889,9 +893,9 @@ function showOcrDebug(q){
 }
 
 /* ---------- 备份（原生分享到 iCloud） ---------- */
-function backup(){ persist(); location.href='scriptable://backup'; }
+function backup(){ persist(); location.href='https://jz-backup.local/'; }
 /* ---------- 导入恢复（覆盖当前数据，导入前确认） ---------- */
-function importData(){ location.href='scriptable://import'; }
+function importData(){ location.href='https://jz-import.local/'; }
 /* Scriptable 侧选完备份文件后注入 */
 window.__importFromScriptable = function(d){
   var data=d||{};

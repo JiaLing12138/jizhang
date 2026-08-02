@@ -38,6 +38,7 @@ try{ PAGE_QUERY=location.search||''; if(PAGE_QUERY) history.replaceState(null,''
 /* 由 Scriptable 注入：INJECTED_STATE / INJECTED_OCR */
 var INJECTED_STATE = /*__STATE__*/null;
 var INJECTED_OCR = /*__OCR__*/'';
+var INJECTED_QUICK = /*__QUICK__*/0;
 </script>""")
 
 # 2) 存储层：localStorage -> 注入状态 + persist 桥
@@ -58,7 +59,7 @@ function set(k,v){ _cache[k]=v; persist(); }
 function persist(){
   var o=document.getElementById('__out'); if(!o) return;
   o.value=JSON.stringify({records:_cache[LS.rec]||[], savings:_cache[LS.sav]||[], accounts:_cache[LS.acc]||[], assets:_cache[LS.asset]||[]});
-  location.href='scriptable://save';
+  location.href='https://jz-save.local/';
 }""")
 
 # 3) toast 后插入确认框（WKWebView 不支持原生 confirm）
@@ -96,11 +97,11 @@ rep("""function backup(){
   } else { a.click(); toast('已导出备份文件'); }
   setTimeout(function(){URL.revokeObjectURL(url);},3000);
 }""",
-"""function backup(){ persist(); location.href='scriptable://backup'; }""")
+"""function backup(){ persist(); location.href='https://jz-backup.local/'; }""")
 
 # 6) 导入 -> 桥接
 rep_regex(r"""function importData\(\)\{[\s\S]*?rd\.readAsText\(f\);\n\}""",
-"""function importData(){ location.href='scriptable://import'; }
+"""function importData(){ location.href='https://jz-import.local/'; }
 /* Scriptable 侧选完备份文件后注入 */
 window.__importFromScriptable = function(d){
   var data=d||{};
@@ -115,7 +116,10 @@ window.__importFromScriptable = function(d){
 rep_regex(r"""function applyOCR\(\)\{[\s\S]*?\n\}\nfunction b64ToText""",
 """function applyOCR(){
   var text=INJECTED_OCR||'';
-  if(!text){ return; }
+  if(!text){
+    if(INJECTED_QUICK){ openForm('exp'); toast('没读到剪贴板内容，请手动填写'); }
+    return;
+  }
   var amt=extractAmount(text); var refund=isRefund(text);
   var cat= refund? '退款' : detectCategory(text);
   var dt=extractDate(text);
@@ -154,7 +158,7 @@ rep('  <div class="toast" id="toast"></div>',
 for bad, hint in [("localStorage", "残留 localStorage"), ("confirm('", "残留原生 confirm 调用"), ("impFile", "残留 impFile")]:
     if bad in html:
         raise SystemExit("自检失败：%s 仍存在" % hint)
-for need, hint in [("/*__STATE__*/null", "状态注入占位丢失"), ("/*__OCR__*/''", "OCR 注入占位丢失"), ("scriptable://save", "保存桥丢失"), ("__importFromScriptable", "导入桥丢失")]:
+for need, hint in [("/*__STATE__*/null", "状态注入占位丢失"), ("/*__OCR__*/''", "OCR 注入占位丢失"), ("/*__QUICK__*/0", "快捷标记占位丢失"), ("https://jz-save.local", "保存桥丢失"), ("__importFromScriptable", "导入桥丢失")]:
     if need not in html:
         raise SystemExit("自检失败：%s" % hint)
 
