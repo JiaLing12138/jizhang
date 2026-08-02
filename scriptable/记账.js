@@ -7,11 +7,18 @@ let D = null;
 try { D = importModule('记账数据'); } catch (e) { D = null; }
 
 function logLine(s) {
+  const t = new Date().toISOString() + '  ' + s + '\n';
   try {
     const fm = FileManager.local();
     const p = fm.documentsDirectory() + '/记账运行日志.txt';
     const old = fm.fileExists(p) ? fm.readString(p) : '';
-    fm.writeString(p, old + new Date().toISOString() + '  ' + s + '\n');
+    fm.writeString(p, old + t);
+  } catch (e) {}
+  try {
+    const fm = FileManager.iCloud();
+    const p = fm.documentsDirectory() + '/记账运行日志.txt';
+    const old = fm.fileExists(p) ? fm.readString(p) : '';
+    fm.writeString(p, old + t);
   } catch (e) {}
 }
 
@@ -33,19 +40,32 @@ function decodePage() {
 
 async function run(qp) {
   qp = qp || {};
-  logLine('start clip=' + (qp.clip || ''));
+  logLine('start');
 
   if (!D) {
     await alertMsg('缺少模块', '没找到 记账数据.js。请确认它在 Scriptable 的 iCloud 文件夹里（文件 App → iCloud 云盘 → Scriptable）。');
     return;
   }
 
-  // 剪贴板每次都读：快捷指令传入文字（clip=1），或剪贴板里恰好有像账单的内容时也自动预填
+  // 取 OCR 文字：优先快捷指令 URL 里的 b64 参数（绕开剪贴板权限），其次剪贴板兜底
   let ocrText = '';
-  try { ocrText = Pasteboard.getString() || ''; } catch (e) {}
+  let src = 'none';
+  if (qp.b64) {
+    try {
+      const b64 = String(qp.b64).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = Data.fromBase64String(b64).toRawString() || '';
+      if (raw) { ocrText = raw; src = 'b64'; }
+    } catch (e) { logLine('b64 err ' + e); }
+  }
+  if (!ocrText) {
+    try { ocrText = Pasteboard.getString() || ''; if (ocrText) src = 'clip'; } catch (e) {}
+  }
   const hasBill = ocrText && (D.extractAmount(ocrText) !== null || /退款|退货|收款方|商户|支付/.test(ocrText));
-  const isQuick = qp.clip === '1' || !!hasBill;
-  logLine('ocr=' + (ocrText ? ocrText.length : 0) + ' quick=' + (isQuick ? 1 : 0));
+  const isQuick = !!ocrText && (src === 'b64' || hasBill);
+  logLine('src=' + src + ' ocr=' + (ocrText ? ocrText.length : 0) + ' quick=' + (isQuick ? 1 : 0));
+  if (qp.debug === '1') {
+    await alertMsg('OCR 诊断', '来源：' + src + '\n文字长度：' + (ocrText ? ocrText.length : 0) + '\n内容前 200 字：\n' + String(ocrText || '（空）').slice(0, 200));
+  }
 
   const dec = decodePage();
   let html = dec.ok ? dec.html : null;
@@ -59,7 +79,7 @@ async function run(qp) {
   }
   if (!html) {
     await alertMsg('页面丢失',
-      '内嵌数据状态：' + dec.why + '。\n\n如果是 empty：手机上还是旧版缓存，请把 Scriptable 完全关掉重开再试。\n如果仍不行，把 文件App → 我的iPhone → Scriptable → 记账运行日志.txt 的内容发我。');
+      '内嵌数据状态：' + dec.why + '。\n\n如果是 empty：手机上还是旧版缓存，请把 Scriptable 完全关掉重开再试。\n如果仍不行，把 文件App → iCloud 云盘 → Scriptable → 记账运行日志.txt 的内容发我。');
     return;
   }
 

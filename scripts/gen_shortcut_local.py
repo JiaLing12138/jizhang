@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """生成「记账OCR本地版」快捷指令（Scriptable 版，带苹果签名）。
 
-流程：截屏 → 裁剪 → 提取文字 → 复制到剪贴板 → 打开 scriptable:///run/记账?clip=1
-（不经过 URL 编码，绕开 urlencode 动作在本机失效的问题）
+流程：截屏 → 裁剪 → 提取文字 → 复制到剪贴板（兜底）→ Base64 编码 →
+打开 scriptable:///run/记账?b64=<编码后的文字>
+（绕开剪贴板权限和 urlencode 动作在本机失效的问题）
 
 用法：python3 scripts/gen_shortcut_local.py
 输出：shortcuts/记账OCR本地版.shortcut
@@ -13,7 +14,7 @@ import subprocess
 import sys
 import uuid
 
-SCRIPT_URL = "scriptable:///run/%E8%AE%B0%E8%B4%A6?clip=1"  # 记账
+SCRIPT_URL_PREFIX = "scriptable:///run/%E8%AE%B0%E8%B4%A6?b64="  # 记账
 
 
 def uid():
@@ -44,7 +45,7 @@ def text_token_string(s, attaches):
 def build_actions():
     u_shot = uid(); u_w = uid(); u_h = uid(); u_calc = uid(); u_rh = uid()
     u_crop = uid(); u_ext = uid(); u_coerce = uid(); u_clip = uid()
-    u_text = uid(); u_url = uid(); u_open = uid()
+    u_b64 = uid(); u_text = uid(); u_url = uid(); u_open = uid()
 
     return [
         # 0. 截屏（背面双击可触发）
@@ -93,16 +94,24 @@ def build_actions():
              "UUID": u_coerce,
              "WFTextActionText": text_token_string(
                  "\ufffc", {"{0, 1}": action_output(u_ext, "Text from Image", coerce=True)})}},
-        # 8. 复制到剪贴板（不编码，Scriptable 直接读）
+        # 8. 复制到剪贴板（兜底通道，b64 失效时 Scriptable 仍可尝试读取）
         {"WFWorkflowActionIdentifier": "is.workflow.actions.setclipboard",
          "WFWorkflowActionParameters": {
              "UUID": u_clip,
              "WFInput": wrap(action_output(u_coerce, "Text", coerce=True))}},
-        # 9-11. 打开 Scriptable 记账
+        # 9. Base64 编码（结果可安全放进 URL，绕开剪贴板权限）
+        {"WFWorkflowActionIdentifier": "is.workflow.actions.base64encode",
+         "WFWorkflowActionParameters": {
+             "UUID": u_b64,
+             "WFInput": wrap(action_output(u_coerce, "Text", coerce=True)),
+             "WFEncodeMode": "Encode"}},
+        # 10-12. 拼 URL 并打开 Scriptable 记账
         {"WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
          "WFWorkflowActionParameters": {
              "UUID": u_text,
-             "WFTextActionText": text_token_string(SCRIPT_URL, {})}},
+             "WFTextActionText": text_token_string(
+                 SCRIPT_URL_PREFIX + "\ufffc",
+                 {"{%d, 1}" % len(SCRIPT_URL_PREFIX): action_output(u_b64, "Base64 Encoded String")})}},
         {"WFWorkflowActionIdentifier": "is.workflow.actions.url",
          "WFWorkflowActionParameters": {
              "UUID": u_url,
