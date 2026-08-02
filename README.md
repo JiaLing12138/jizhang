@@ -2,6 +2,21 @@
 
 两个纯前端网页应用，数据存 localStorage，可离线使用。
 
+## 当前推荐：Scriptable 本地版（iPhone）
+
+不再依赖任何网页托管：把"网页"跑在手机本地的 Scriptable App 里，数据存 iCloud Drive，永久可用。
+
+- **记一笔**：双击背面 → 快捷指令 `记账OCR本地版`（截屏识别 → 复制到剪贴板 → 自动打开 Scriptable 记账页，预填后确认保存）
+- **看统计**：打开 Scriptable 的 `记账`，或桌面加 `记账小组件` 看本月支出/收入/结余
+- **文件位置**：`文件 App → iCloud 云盘 → Scriptable/`（记账数据.json、记账页面.html、记账.js 等）
+- **备份/导入**：记账页右上角「备份/导入」按钮
+
+相关文件在 `scriptable/`（源），已同步到 Scriptable 的 iCloud 目录。
+
+## 网页版（备用，国内访问不稳定）
+
+> ⚠️ 网页版主要靠 jsDelivr CDN 直链，`.html` 会以纯文本返回、无法渲染，且各平台国内访问时好时坏；日常使用请走上面的 Scriptable 本地版。
+
 ## 应用列表
 
 | 应用 | 文件 | 部署地址 |
