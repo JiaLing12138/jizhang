@@ -94,7 +94,7 @@ def build_actions():
              "WFTextActionText": text_token_string(
                  "\ufffc", {"{0, 1}": action_output(u_ext, "Text from Image", coerce=True)})}},
         # 8. 复制到剪贴板（不编码，Scriptable 直接读）
-        {"WFWorkflowActionIdentifier": "is.workflow.actions.copytoClipboard",
+        {"WFWorkflowActionIdentifier": "is.workflow.actions.setclipboard",
          "WFWorkflowActionParameters": {
              "UUID": u_clip,
              "WFInput": wrap(action_output(u_coerce, "Text", coerce=True))}},
